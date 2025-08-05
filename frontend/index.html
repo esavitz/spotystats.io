@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SpotyStats</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #121212;
+      color: #FFFFFF;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background-color: #1DB954;
+      padding: 1.5rem;
+      text-align: center;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 2rem;
+      font-weight: 700;
+    }
+
+    header p {
+      margin-top: 0.5rem;
+      font-size: 1rem;
+      font-weight: 400;
+      color: #ffffffcc;
+    }
+
+    .term-selector {
+      text-align: center;
+      padding: 1rem;
+      background-color: #181818;
+    }
+
+    .term-selector button {
+      background: #1DB954;
+      color: #fff;
+      border: none;
+      padding: 0.5rem 1rem;
+      margin: 0 0.5rem;
+      cursor: pointer;
+      border-radius: 4px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      transition: background 0.3s;
+    }
+
+    .term-selector button.active {
+      background: #1ed760;
+    }
+
+    .section {
+      padding: 2rem 1rem;
+    }
+
+    h2 {
+      font-size: 1.3rem;
+      color: #1DB954;
+      margin-bottom: 1rem;
+      border-bottom: 2px solid #1DB954;
+      display: inline-block;
+    }
+
+    .compare {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      margin-top: 1rem;
+    }
+
+    .column {
+      flex: 1;
+      min-width: 250px;
+      background-color: #1e1e1e;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    h3 {
+      font-size: 1.1rem;
+      color: #1DB954;
+      margin-top: 0;
+    }
+
+    ul {
+      list-style: decimal inside;
+      padding-left: 0;
+      margin: 0;
+    }
+
+    li {
+      padding: 0.3rem 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .chart-container {
+      background: #1e1e1e;
+      margin: 2rem;
+      padding: 1rem;
+      border-radius: 8px;
+    }
+
+    canvas {
+      background: #121212;
+    }
+
+    @media (max-width: 768px) {
+      .compare {
+        flex-direction: column;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>SpotyStats</h1>
+    <p>Your real Spotify listening history – tracked your way</p>
+  </header>
+
+  <div class="term-selector">
+    <button data-term="short_term" class="active">Last 4 Weeks</button>
+    <button data-term="medium_term">Last 6 Months</button>
+    <button data-term="long_term">All Time</button>
+  </div>
+
+  <div id="stats-container" class="section"></div>
+
+  <div class="chart-container">
+    <h2>📈 Daily Listening Trends</h2>
+    <canvas id="dailyChart" width="400" height="200"></canvas>
+  </div>
+
+  <script>
+    const API_URL = 'https://3jg3enwy07.execute-api.us-east-2.amazonaws.com/stats';
+
+    async function loadStats() {
+      try {
+        const res = await fetch(API_URL);
+        const stats = await res.json();
+        renderStats(stats);
+        renderChart(stats.daily_listens || {});
+      } catch (err) {
+        document.getElementById('stats-container').innerHTML =
+          '<p style="color: red;">⚠️ Error loading stats. Please try again later.</p>';
+        console.error("Error loading stats:", err);
+      }
+    }
+
+    function renderList(items, key = 'name', countKey = 'count', limit = 10) {
+      return `<ul>${items.slice(0, limit).map((item, index) =>
+        `<li><strong>${item[key]}</strong>${item[countKey] ? ` (${item[countKey]})` : ''}</li>`
+      ).join('')}</ul>`;
+    }
+
+    function renderStats(stats) {
+      const container = document.getElementById('stats-container');
+      container.innerHTML = '';
+
+      ['short_term', 'medium_term', 'long_term'].forEach(term => {
+        const myTracks = stats.my_stats[term]?.tracks || [];
+        const myArtists = stats.my_stats[term]?.artists || [];
+        const myAlbums = stats.my_stats[term]?.albums || [];
+
+        const spTracks = stats.spotify_stats[term]?.top_tracks || [];
+        const spArtists = stats.spotify_stats[term]?.top_artists || [];
+
+        const section = document.createElement('div');
+        section.className = `term-section ${term} ${term !== 'short_term' ? 'hidden' : ''}`;
+
+        section.innerHTML = `
+          <h2>${term.replace('_', ' ').toUpperCase()}</h2>
+          <div class="compare">
+            <div class="column">
+              <h3>My Top Tracks</h3>
+              ${renderList(myTracks)}
+            </div>
+            <div class="column">
+              <h3>Spotify Top Tracks</h3>
+              ${renderList(spTracks)}
+            </div>
+            <div class="column">
+              <h3>My Top Artists</h3>
+              ${renderList(myArtists)}
+            </div>
+            <div class="column">
+              <h3>Spotify Top Artists</h3>
+              ${renderList(spArtists)}
+            </div>
+            <div class="column">
+              <h3>My Top Albums</h3>
+              ${renderList(myAlbums)}
+            </div>
+          </div>
+        `;
+
+        container.appendChild(section);
+      });
+
+      setupTermSwitcher();
+    }
+
+    function setupTermSwitcher() {
+      const buttons = document.querySelectorAll('.term-selector button');
+      buttons.forEach(button => {
+        button.addEventListener('click', () => {
+          buttons.forEach(b => b.classList.remove('active'));
+          button.classList.add('active');
+          const term = button.dataset.term;
+          document.querySelectorAll('.term-section').forEach(section => section.classList.add('hidden'));
+          document.querySelector(`.${term}`).classList.remove('hidden');
+        });
+      });
+    }
+
+    function renderChart(dailyData) {
+      const ctx = document.getElementById('dailyChart').getContext('2d');
+      const labels = Object.keys(dailyData).sort();
+      const values = labels.map(date => dailyData[date]);
+
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Unique Songs per Day',
+            data: values,
+            fill: false,
+            borderColor: '#1DB954',
+            tension: 0.25
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            x: {
+              ticks: {
+                color: '#ccc'
+              }
+            },
+            y: {
+              beginAtZero: true,
+              ticks: {
+                color: '#ccc'
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              labels: {
+                color: '#ccc'
+              }
+            }
+          }
+        }
+      });
+    }
+
+    loadStats();
+  </script>
+</body>
+</html>
