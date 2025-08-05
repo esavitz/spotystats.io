@@ -138,19 +138,22 @@
   <div id="stats-container" class="section"></div>
 
   <div class="chart-container">
-    <h2>📈 Daily Listening Trends</h2>
+    <h2>📈 Daily Unique Tracks</h2>
     <canvas id="dailyChart" width="400" height="200"></canvas>
   </div>
 
   <script>
     const API_URL = 'https://3jg3enwy07.execute-api.us-east-2.amazonaws.com/stats';
+    let globalStats = null;
+    let chartInstance = null;
 
     async function loadStats() {
       try {
         const res = await fetch(API_URL);
         const stats = await res.json();
+        globalStats = stats;
         renderStats(stats);
-        renderChart(stats.daily_listens || {});
+        renderChart(stats, 'short_term');
       } catch (err) {
         document.getElementById('stats-container').innerHTML =
           '<p style="color: red;">⚠️ Error loading stats. Please try again later.</p>';
@@ -159,7 +162,7 @@
     }
 
     function renderList(items, key = 'name', countKey = 'count', limit = 10) {
-      return `<ul>${items.slice(0, limit).map((item, index) =>
+      return `<ul>${items.slice(0, limit).map(item =>
         `<li><strong>${item[key]}</strong>${item[countKey] ? ` (${item[countKey]})` : ''}</li>`
       ).join('')}</ul>`;
     }
@@ -171,7 +174,7 @@
       ['short_term', 'medium_term', 'long_term'].forEach(term => {
         const myTracks = stats.my_stats[term]?.tracks || [];
         const myArtists = stats.my_stats[term]?.artists || [];
-        const myAlbums = stats.my_stats[term]?.albums || [];
+        const myAlbums = stats.my_stats[term]?.top_albums || [];
 
         const spTracks = stats.spotify_stats[term]?.top_tracks || [];
         const spArtists = stats.spotify_stats[term]?.top_artists || [];
@@ -220,16 +223,24 @@
           const term = button.dataset.term;
           document.querySelectorAll('.term-section').forEach(section => section.classList.add('hidden'));
           document.querySelector(`.${term}`).classList.remove('hidden');
+
+          if (globalStats) renderChart(globalStats, term);
         });
       });
     }
 
-    function renderChart(dailyData) {
-      const ctx = document.getElementById('dailyChart').getContext('2d');
+    function renderChart(stats, term) {
+      const dailyData = stats.my_stats[term]?.daily_unique_tracks || {};
       const labels = Object.keys(dailyData).sort();
       const values = labels.map(date => dailyData[date]);
 
-      new Chart(ctx, {
+      const ctx = document.getElementById('dailyChart').getContext('2d');
+
+      if (chartInstance) {
+        chartInstance.destroy();
+      }
+
+      chartInstance = new Chart(ctx, {
         type: 'line',
         data: {
           labels,
@@ -245,22 +256,16 @@
           responsive: true,
           scales: {
             x: {
-              ticks: {
-                color: '#ccc'
-              }
+              ticks: { color: '#ccc' }
             },
             y: {
               beginAtZero: true,
-              ticks: {
-                color: '#ccc'
-              }
+              ticks: { color: '#ccc' }
             }
           },
           plugins: {
             legend: {
-              labels: {
-                color: '#ccc'
-              }
+              labels: { color: '#ccc' }
             }
           }
         }
