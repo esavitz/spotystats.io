@@ -1,0 +1,24 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Lambda build
+*.zip
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# CDK / AWS
+cdk.out/
+*.tsbuildinfo
+
+# Mac system files
+.DS_Store
+
+# VSCode
+.vscode/
